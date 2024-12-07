@@ -10,275 +10,71 @@
 Pull the latest image using:
 
 ```
-$ docker pull sieteunoseis/spandsp
-$ docker run -it sieteunoseis/spandsp
+$ docker pull ghcr.io/sieteunoseis/spandsp:main
 ```
 
-or clone this repo and
+or clone this repo and build the image locally:
 
 ```
 $ docker build -t spandsp .
 ```
 
-## Usage
-
-You can pass your spandsp arguments to the run command, example:
+## Basic Usage
 
 ```
-$ docker run --rm -it -v $(pwd)/data:/data -w /data spandsp g711_tests -d ECM-call.wav
-$ docker run --rm -it -v $(pwd)/data:/data -w /data spandsp t38_decode -i ./pcap/08-t38fail.pcap
-$ docker run --rm -it -v $(pwd)/data:/data -w /data spandsp fax_decode ./wav/ECM-call-Audacity.wav
-$ docker run --rm -it -v $(pwd)/data:/data -w /data/wav spandsp ffmpeg -i ECM-call.wav -c:a pcm_mulaw -ar 8000 -ac 1 output.wav
-$ docker run --rm -it -v $(pwd)/data:/data -w /data/wav spandsp ffmpeg -i ECM-call.wav -map_channel 0.0.1 right.wav
-$ docker run --rm -it -v $(pwd)/data:/data -w /data/wav spandsp ffmpeg -i ECM-call.wav -af "pan=mono|c0=FR" mono.wav
-$ docker run --rm -it -v $(pwd)/data:/data -w /data spandsp convert fax_decode.tif -append merged.tif
-$ docker run --rm -it -v $(pwd)/data:/data -w /data spandsp convert fax_decode.tif +append merged.tif
-```
-If you want to use custom scenarios you can use the Docker VOLUME argument to include your local files inside your Docker image.  The `-v $PWD/scenarios` is your local hosts working directory and `/sipp` is the containers working directory.
-
-```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf XML_FILE
+docker run -it ghcr.io/sieteunoseis/spandsp:main
 ```
 
-## Examples
+Will give you a bash shell where you can run the spandsp commands manually. See [SpanDSP](https://www.soft-switch.org/spandsp-modules.html) for more information on the available commands.
 
-### Basic UAC
+## Detailed Usage
 
-Basic UAC scenario. The UAC is responsible for the dialog creation and closure. Single call is made with a 5 second pause between the INVITE and BYE.
-
-```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uac.xml DEST_IP -s DEST_NUMBER -key tel FROM_NUMBER -key host_ip DOCKER_HOST_IP -m 1
-```
-
-### Active Media (UAC)
-
-UAC scenario for Active media negotiation (SDP offer sent into the INVITE request).
-
-The UAC is responsible for the dialog creation and closure.
-
-Single call is made.
-
-Audio is played from a pcap file for 90 seconds, before the call is terminated.
-
-Example shows a single call being made to DEST_IP with the destination number of DEST_NUMBER and the From header set to FROM_NUMBER. The DOCKER_HOST_IP is the IP address of the Docker host.
-
-Scenario options for g711a, g711u and g722 are included.
+### Fax Decode
 
 ```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uac-active-g711a.xml DEST_IP -s DEST_NUMBER -key tel FROM_NUMBER -key host_ip DOCKER_HOST_IP -m 1
+$ docker run --rm -it -v $(pwd)/data:/data -w /data ghcr.io/sieteunoseis/spandsp:main fax_decode ./wav/ECM-call-mono.wav
 ```
+This will decode the ECM-call-mono.wav file and create a fax_decode.tif file. You can then view this file using an image viewer. 
 
-```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uac-active-g711u.xml DEST_IP -s DEST_NUMBER -key tel FROM_NUMBER -key host_ip DOCKER_HOST_IP -m 1
-```
+Note: That the fax_decode.tif file will be created in the working directory specified in the -w argument within the container. This directory is then mounted to a local directory on the host machine with the -v argument.
 
-```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uac-active-g722.xml DEST_IP -s DEST_NUMBER -key tel FROM_NUMBER -key host_ip DOCKER_HOST_IP -m 1
-```
+### Convert Options
 
-#### Example with CSV file for multiple calls
+#### Convert Stereo to Mono
 
-Example shows 10 calls being made to DEST_IP with the destination number sourced from the CSV file and the From header set to FROM_NUMBER. The DOCKER_HOST_IP is the IP address of the Docker host.
+If your wav file is stereo, you can convert it to mono using the following command, before running the fax_decode command:
 
 ```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uac-active-g711a-csv.xml -inf test-10.csv DEST_IP -key tel FROM_NUMBER -key host_ip DOCKER_HOST_IP -m 10
+$ docker run --rm -it -v $(pwd)/data:/data -w /data/wav ghcr.io/sieteunoseis/spandsp:main ffmpeg -i ECM-call.wav -af "pan=mono|c0=FR" mono.wav
 ```
 
-### Passive Media (UAC)
+This will save the right channel of the stereo file as a mono file. You can then use this file with the *fax_decode* command. If you want to use the left channel, change c0=FR to c0=FL.
 
-UAC scenario for Passive media negotiation (SDP offer sent with the 200 OK).
+#### Merge TIF files
 
-The UAC is responsible for the dialog creation and closure.
-
-Single call is made.
-
-Audio is played from a pcap file (g711a).
-
-The DOCKER_HOST_IP is the IP address of the Docker host.
+If the resulting fax_decode.tif file is split into multiple pages, you can merge them using the following command:
 
 ```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uac-passive.xml DEST_IP -s DEST_NUMBER -key host_ip DOCKER_HOST_IP -m 1
+$ docker run --rm -it -v $(pwd)/data:/data -w /data ghcr.io/sieteunoseis/spandsp:main convert fax_decode.tif -append merged.tif
 ```
+This will combine the pages into a single file.
 
-### Hold (UAC)
+Use the *-append* option to merge the files vertically and the *+append* option to merge them horizontally depending on the orientation of the pages.
 
-UAC scenario for call hold using the RFC 3264 specification (a=sendonly/recvonly).
-
-In this scenario the UAC sends the first INVITE, and the hold and retrieve re-INVITEs.
-
-Single call is made.
-
-Audio is played from a pcap file.
+### G711 Tests
 
 ```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uac-hold.xml DEST_IP -s DEST_NUMBER -key tel FROM_NUMBER -key host_ip DOCKER_HOST_IP -m 1
+$ docker run --rm -it -v $(pwd)/data:/data -w /data/wave ghcr.io/sieteunoseis/spandsp:main g711_tests -d ECM-call.wav
 ```
+Transcode the provided wav file to a-law and u-law formats based flags provided. See [SpanDSP](https://www.soft-switch.org/spandsp-modules.html) for more information on the available commands. 
 
-### DTMF (UAC)
+### Additional Information can be found at:
 
-UAC scenario for sending DTMF tones.
-
-Single call is made.
-
-DTMF tones are played from a pcap file(s).
-
-NOTE: Tested with [Test Call](https://testcall.com/804-222-1111/). You can use this along with a packet capture to verify that the DTMF tones are being sent correctly. Test Call will play back audio of the DTMF tones that it receives.
-
-```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uac-dtmf.xml DEST_IP -s DEST_NUMBER -key tel FROM_NUMBER -key host_ip DOCKER_HOST_IP -m 1
-```
-
-### OPTIONS (UAC)
-
-UAC scenario for sending OPTIONS.
-
-Single request is sent.
-
-Useful to check if a firewall is blocking SIP traffic.
-
-```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uac-options.xml DEST_IP -key host_ip DOCKER_HOST_IP -m 1
-```
-
-### OPTIONS (UAS)
-
-UAS scenario for recieving OPTIONS.
-
-Single request is sent.
-
-Useful to check if a firewall is blocking SIP traffic.
-
-```
-$ docker run -it -v $PWD/scenarios:/sipp -p 5060:5060/udp sieteunoseis/sipp -sf uas-options.xml DEST_IP -key host_ip DOCKER_HOST_IP -m 1
-```
-
-### Call ID (UAC)
-
-Set Call-ID header to a random UUID.
-
-Assuming ```uuidgen``` is installed on your box you can use something like this:
-
-```
-$ docker run -it sieteunoseis/sipp uac DEST_IP -s DEST_NUMBER -cid_str $(uuidgen)@%s
-```
-Example:
-
-```
-    ...
-    Call-ID: 5d91975e-202d-44a6-b374-4171e64bb785
-    ...
-```
-
-### Adding additional ports to Docker Container
-
-If you need to add additional ports to the Docker Container you can use the `-p` argument. This is usually required if you are using a scenario that requires RTP ports.
-
-Example (Single Ports):
-
-```
--p 5000:5000/udp -p 5001:5001/udp -p 5002:5002/udp
-```
-
-Example (Range of Ports):
-
-```
--p 5000-6000:5000-6000/udp
-```
-
-Or you can expose the constainer to the host network instead of mapping ports. It allows the container greater network access than it can normally get.
-
-```
---net=host
-```
-
-
-### Other Examples/Scenarios/Guides
-
-- [SIPp-by-example](https://github.com/pbertera/SIPp-by-example)
-- [sipp-scenarios](https://github.com/saghul/sipp-scenarios)
-- [sipp-scenarios](https://github.com/ossobv/sipp-scenarios)
-- [sipp/sipp_cheatsheet](https://tomeko.net/other/sipp/sipp_cheatsheet.php?lang=en)
-- [sipp with Cisco CUCM](https://dmkravch.github.io/2018-01-21-sipp-with-cucm/)
-- [Generating SIP traffic with SIPp (Video)](https://www.youtube.com/watch?v=Z3XQ3qZ3XqQ)
-- [ctaloi/sipp](https://hub.docker.com/r/ctaloi/sipp)
-
-### Cisco CUCM Configuration
-
-#### Create a new SIP Trunk Security Profile. 
-
-System > Security > SIP Trunk Security Profile.
-
-Note: All above examples are using port 5060/UDP, which is why we are updating the port here.
-
-![SIP Trunk Security Profile](https://github.com/sieteunoseis/sipp/blob/main/screenshots/sip-trunk-security-profile.png?raw=true)
-
-#### Create a new SIP Profile.
-
-Device > Device Settings > SIP Profile.
-
-Here you can modify the SIP timers to match your SIPp scenario or update ports if required.
-
-You can also enable/disable SIP OPTIONS ping. If you enable this you can use the UAS OPTIONS scenario above to test.
-
-![SIP Profile Options](https://github.com/sieteunoseis/sipp/blob/main/screenshots/sip-profile-options.png?raw=true)
-
-Media Ports
-
-![SIP Profile Media Ports](https://github.com/sieteunoseis/sipp/blob/main/screenshots/sip-profile-media-ports.png?raw=true)
-
-#### Create a new SIP Trunk.
-
-Device > Trunk > Add New.
-
-Set CSS for call permissions.
-
-![SIP Trunk CSS](https://github.com/sieteunoseis/sipp/blob/main/screenshots/sip-trunk-inbound-css.png?raw=true)
-
-Set SIP Information, including the SIP Trunk Security Profile and SIP Profile created above.
-
-![Trunk SIP Information](https://github.com/sieteunoseis/sipp/blob/main/screenshots/sip-trunk-sip-information.png?raw=true)
-
-#### Create Route Pattern for UAS scenarios.
-
-Call Routing > Route/Hunt > Route Pattern.
-
-![Route Pattern](https://github.com/sieteunoseis/sipp/blob/main/screenshots/route-pattern-sipp-uas.png?raw=true)
-
-### Packet captures
-
-Packet captures may be useful for troubleshooting, or validating SIPp scenarios. I've included some examples that I use in my testing below.
-
-#### Ubuntu Linux (Docker Host)
-
-```
-tcpdump -s 0 -i ens160 -w sipp.pcap
-```
-
-#### Cisco vCube (ISR1000v)
-
-```
-Device>en
-Device#config t
-Device(config)#ip access-list extended PACKET_CAP_FILTER
-Device(config)#10 permit ip any any
-Device(config)#!
-Device(config)#end
-Device#monitor capture PACKET_CAP start
-Device#monitor capture PACKET_CAP access-list PACKET_CAP_FILTER 	 
-Device#monitor capture PACKET_CAP limit duration 1000
-Device#monitor capture PACKET_CAP interface GigabitEthernet 1 both
-Device#monitor capture PACKET_CAP buffer circular size 10
-Device#monitor capture PACKET_CAP start
-Device#monitor capture PACKET_CAP export tftp://192.168.1.100/sipp.pcap
-Device#monitor capture PACKET_CAP stop
-Device#monitor capture clear 
-Captured data will be deleted [clear]?[confirm]
-cleared buffer : PACKET_CAP
-```
-
-#### Cisco CUCM
-
-Check out my article [Automating PCAP captures on Cisco VOS applications](https://medium.com/automate-builders/automating-pcap-captures-on-cisco-vos-applications-90d4b54588de) for a great example of how to capture SIP traffic on CUCM.
+- [Soft-Switch](https://www.soft-switch.org/)
+- [Sounds of Fax Modes and ECM](https://goughlui.com/2013/02/13/sounds-of-fax-modes-and-ecm/)
+- [Fax Technicalities & Audio Samples](https://goughlui.com/project-fax/fax-technicalities-audio-samples/)
+- [Decode a fax](https://www.journaldulapin.com/2022/10/10/decode-fax/)
+- [buildroot](https://sources.buildroot.net/spandsp/)
 
 ### Giving Back
 
